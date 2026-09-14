@@ -29,40 +29,68 @@ class NewVisitorTest(LiveServerTestCase):
                     raise e
                 time.sleep(0.5)
 
-    def test_can_start_a_list_and_retrieve_it_later(self):
-        # Edith ouviu falar de uma nova aplicação online interessante.
-        # Ela vai conferir sua página inicial
+    def test_can_start_a_list_for_one_user(self):
+        # Edith acessa a página inicial
         self.browser.get(self.live_server_url)
-
-        # Ela nota que o título da página e o cabeçalho mencionam listas de tarefas (To-Do)
         self.assertIn("To-Do", self.browser.title)
         header_text = self.browser.find_element(By.TAG_NAME, "h1").text
         self.assertIn("To-Do", header_text)
 
-        # Ela é convidada a inserir um item de tarefa imediatamente
+        # Ela insere o primeiro item
         inputbox = self.browser.find_element(By.ID, "id_new_item")
         self.assertEqual(
             inputbox.get_attribute("placeholder"), "Enter a to-do item"
         )
-
-        # Ela digita "Buy peacock feathers" em uma caixa de texto
         inputbox.send_keys("Buy peacock feathers")
-
-        # Quando ela aperta Enter, a página é atualizada e agora a página lista
-        # "1: Buy peacock feathers" como um item em uma lista de tarefas
         inputbox.send_keys(Keys.ENTER)
         self.wait_for_row_in_list_table("1: Buy peacock feathers")
 
-        # Ainda há uma caixa de texto convidando-a a adicionar outro item.
-        # Ela insere "Use peacock feathers to make a fly"
+        # Ela insere o segundo item
         inputbox = self.browser.find_element(By.ID, "id_new_item")
         inputbox.send_keys("Use peacock feathers to make a fly")
         inputbox.send_keys(Keys.ENTER)
 
-        # A página é atualizada novamente e agora mostra ambos os itens na lista
+        # A página é atualizada e mostra ambos os itens
         self.wait_for_row_in_list_table("1: Buy peacock feathers")
         self.wait_for_row_in_list_table(
             "2: Use peacock feathers to make a fly"
         )
 
-        # Fim do teste por enquanto
+    def test_multiple_users_can_start_lists_at_different_urls(self):
+        # Edith inicia uma nova lista de tarefas
+        self.browser.get(self.live_server_url)
+        inputbox = self.browser.find_element(By.ID, "id_new_item")
+        inputbox.send_keys("Buy peacock feathers")
+        inputbox.send_keys(Keys.ENTER)
+        self.wait_for_row_in_list_table("1: Buy peacock feathers")
+
+        # Ela nota que sua lista tem uma URL única
+        edith_list_url = self.browser.current_url
+        self.assertRegex(edith_list_url, "/lists/.+")
+
+        # Agora um novo usuário, João, entra no site.
+        # Usamos uma nova sessão de navegador para garantir que nenhum dado de Edith venha de cookies
+        self.browser.quit()
+        self.browser = webdriver.Firefox()
+
+        # João acessa a página inicial e não há sinal da lista de Edith
+        self.browser.get(self.live_server_url)
+        page_text = self.browser.find_element(By.TAG_NAME, "body").text
+        self.assertNotIn("Buy peacock feathers", page_text)
+        self.assertNotIn("make a fly", page_text)
+
+        # João inicia uma nova lista inserindo um item novo
+        inputbox = self.browser.find_element(By.ID, "id_new_item")
+        inputbox.send_keys("Buy milk")
+        inputbox.send_keys(Keys.ENTER)
+        self.wait_for_row_in_list_table("1: Buy milk")
+
+        # João recebe sua própria URL única
+        joao_list_url = self.browser.current_url
+        self.assertRegex(joao_list_url, "/lists/.+")
+        self.assertNotEqual(joao_list_url, edith_list_url)
+
+        # Novamente, não há sinal da lista de Edith
+        page_text = self.browser.find_element(By.TAG_NAME, "body").text
+        self.assertNotIn("Buy peacock feathers", page_text)
+        self.assertIn("Buy milk", page_text)
